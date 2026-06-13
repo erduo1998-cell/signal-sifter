@@ -130,6 +130,15 @@ signal-sifter/
 
 ---
 
+## Connect
+
+<p align="center">
+  <img src="wechat-qrcode.jpg" width="200" alt="WeChat QR Code"><br>
+  <sub>扫码加微信 · 交个朋友</sub>
+</p>
+
+---
+
 ## License
 
 MIT — take it, fork it, build on it. If you find a gem with it, tell more people about the project than about this tool.
