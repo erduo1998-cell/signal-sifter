@@ -1,0 +1,9 @@
+# Signal Sifter output reports
+signal-sift-*.md
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
