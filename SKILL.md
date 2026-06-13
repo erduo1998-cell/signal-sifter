@@ -1,6 +1,6 @@
 ---
 name: gem-hunter
-description: 当用户想挖掘小众开源项目选题、搜索痛点问题、寻找 agent 可用的解决方案时使用。两条独立流水线——痛点发现（X/Twitter + Reddit API + HN Algolia + GitHub API + V2EX）和方案发现（Fossick MCP + Reddit/X/HN 社区验证），最后交叉匹配输出"痛点→方案"配对报告。核心采集走平台 API 直连，不用搜索引擎中转论坛内容。
+description: 当用户想挖掘小众开源项目选题、搜索痛点问题、寻找 agent 可用的解决方案时使用。两条独立流水线——痛点发现（X/Twitter Bird + Reddit via last30days 引擎 + HN Algolia + 小红书 via last30days 引擎 + V2EX）和方案发现（Fossick MCP + Reddit/X/HN 社区验证），最后交叉匹配输出"痛点→方案"配对报告。
 ---
 
 # Gem Hunter（猎手）
@@ -50,7 +50,7 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
 ### 痛点和方案是两件事，分开挖
 
-- **痛点**来自人在网上的抱怨、求推荐、吐槽——信号在 X/Twitter（Bird 引擎）、Reddit JSON API、HN Algolia API、GitHub Issues、V2EX。**全部走平台 API 直连，不用搜索引擎中转论坛内容**
+- **痛点**来自人在网上的抱怨、求推荐、吐槽——信号在 X/Twitter（Bird 引擎）、Reddit（last30days 引擎，三层降级防封锁）、HN Algolia API、GitHub Issues、小红书（last30days 引擎，直连 MCP API）、V2EX（WebSearch 兜底）
 - **方案**来自 GitHub 的角落——Fossick MCP 扫小众仓库，Reddit/X/HN 做社区验证
 
 ### 痛点要对，不能大
@@ -70,7 +70,7 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
 ## 技能
 
-- **多源扫描**：痛点源（X/Twitter Bird、Reddit JSON API、HN Algolia、GitHub API、V2EX WebSearch、小红书 WebSearch）和方案源（Fossick MCP + Reddit/X/HN 社区验证）分开扫描，API 直连拿到带互动数据的一手内容
+- **多源扫描**：痛点源（X/Twitter Bird、Reddit via last30days 引擎、HN Algolia、GitHub Issues、小红书 via last30days 引擎、V2EX WebSearch）和方案源（Fossick MCP + Reddit/X/HN 社区验证）分开扫描，API 直连拿到带互动数据的一手内容
 - **痛点识别**：区分"一次性抱怨"和"结构性痛点"，过滤假信号
 - **项目评估**：不看 Star 数，看解决问题的能力和活跃度
 - **交叉匹配**：把痛点和对策连起来，标注匹配度
@@ -134,7 +134,8 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
 ### 合理跳过的情况（仍需走降级通知）
 
-- Reddit API 被封锁（返回 HTML 而非 JSON）→ 搜索两次确认后，降级为 WebSearch `site:reddit.com`
+- last30days 引擎不可用（Python < 3.12 或脚本缺失）→ 降级为 WebSearch `site:reddit.com` 或 `site:xiaohongshu.com`
+- 小红书 MCP 服务不可用 → 降级为 WebSearch `site:xiaohongshu.com`
 - X AUTH_TOKEN/CT0 不可用 → 降级为 WebSearch `site:x.com`
 - Node.js 不可用（Bird 引擎需要）→ 降级为 WebSearch `site:x.com`
 
@@ -151,18 +152,18 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 3. **只搜个人求助和吐槽**，**不搜行业分析媒体**（VentureBeat、a16z、学术论文等——它们在输出趋势，不是痛点）
 4. 按以下优先级并行搜索（API 直连优先，WebSearch 兜底）：
 
-   **第一梯队 —— Bash 调 API（信号最干净）：**
+   **第一梯队 —— API 直连（信号最干净）：**
 
    | 优先级 | 源 | 工具 | 搜几次 |
    |--------|-----|------|--------|
    | 🔴 最高 | X/Twitter | `node bird-search.mjs` + AUTH_TOKEN/CT0 | 2 组关键词 × 30 条 |
-   | 🟠 高 | Reddit | `curl` JSON API（需代理；被封锁时自动降级 WebSearch） | 3-4 个子版块 × 25 条 |
+   | 🟠 高 | Reddit | `last30days.py --search=reddit`（三层降级：JSON→RSS→Shreddit） | 2 组关键词 × 25 条 |
    | 🟡 中高 | HN | `curl` Algolia API | 2 组 tags × 20 条 |
-   | 🟢 中 | GitHub Issues | Fossick `search_code` 或 `gh search issues` | 1-2 组关键词 × 20 条 |
+   | 🟢 中 | 小红书 | `last30days.py --search=xiaohongshu`（直连 xiaohongshu-mcp API） | 1-2 组关键词 × 15 条 |
 
    **第二梯队 —— WebSearch 兜底：**
-   - V2EX：`site:v2ex.com` WebSearch（标注 ⚠️ 搜索引擎中转，信号可能偏弱）
-   - 小红书：`site:xiaohongshu.com` WebSearch（标注 ⚠️ 搜索引擎中转，MCP API 未配置）
+   - V2EX：`site:v2ex.com` WebSearch（V2EX 无公开 API，唯一方式）
+   - GitHub Issues：Fossick `search_code` 或 `gh search issues` | 1-2 组关键词 × 20 条
 
    **加载 X 认证（Bird 引擎）：**
    ```bash
@@ -227,8 +228,8 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
    - 如果候选项目所有三步都完成了但全部不合格（没人维护 / 代码量异常 / README 解释不清），如实报告"本轮未发现合格项目"
    - 跳过这三步中的任何一步 = 项目未完成初筛 = 不能进入最后报告。即使社区验证做了也不行
 
-   **第二步：社区验证（API 直连）**
-   - **Reddit JSON API**：搜项目名在 r/coolgithubprojects、r/selfhosted、r/programming 有没有讨论
+   **第二步：社区验证**
+   - **Reddit**：用 `last30days.py "{项目名}" --search=reddit --quick --emit=json` 搜项目名在社区是否有讨论
    - **X/Twitter Bird**：搜项目名 + `recommend OR love OR using OR switched to`，看有没有真实用户推荐
    - **HN Algolia**：搜项目名，看有没有 Show HN 帖子或评论提及
 
@@ -309,9 +310,10 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
 - **X (Bird) API 搜不到结果**：换关键词重试一次；仍无结果 → 走降级协议
 - **X auth 不可用**（AUTH_TOKEN/CT0 缺失）：降级为 WebSearch `site:x.com` 兜底，标注"X 未认证，信号偏弱"。提示用户运行 last30days setup wizard 提取浏览器 cookie
-- **Reddit API 被封锁**（返回 HTML 而非 JSON）：降级为 WebSearch `site:reddit.com`，标注"Reddit API 被封锁，搜索引擎中转"
+- **Reddit 搜索**：走 last30days 引擎，内部自动三层降级（`.json` → RSS feed → Shreddit HTML），模型不需要关心封锁问题。
 - **Node.js 不可用**（Bird 引擎需要）：跳过 X API 路径，降级为 WebSearch `site:x.com`
-- **小红书 MCP API 不可用**：直接用 WebSearch `site:xiaohongshu.com` 兜底，标注"MCP API 未配置，搜索引擎中转"
+- **小红书搜索**：优先走 last30days 引擎（`--search=xiaohongshu`，直连 MCP API）；MCP 服务不可用时 → 走降级协议，降级为 WebSearch `site:xiaohongshu.com` 兜底，标注"MCP API 不可用，搜索引擎中转"
+- **last30days 引擎调用失败**（Python 版本不对、脚本缺失等）：降级为 WebSearch `site:reddit.com` 或 `site:xiaohongshu.com`，标注"搜索引擎中转"
 - **所有源都搜不到**：扩大时间范围（6→12 个月），放宽搜索条件；仍无结果则如实报告"本轮扫描未发现匹配结果"
 - **结果太少（< 3 个）**：标注"信号弱"，建议换个领域或扩大搜索范围
 
@@ -406,36 +408,81 @@ for t in items[:20]:
 
 **信号判断：** likes > 50 + replies > 10 → 强信号。同一痛点被 3+ 条独立推文提到 → 交叉验证通过。
 
-### Reddit（JSON API）—— 讨论深度最高
+### Reddit（last30days 引擎）—— 三层降级，防封锁
 
-⚠️ **Reddit 的 shreddit 反爬系统可能封锁代理 IP，`.json` API 返回 HTML 空壳而非 JSON。** 遇到此情况自动降级为 WebSearch `site:reddit.com` 兜底。
+**gem-hunter 不手动调 Reddit API。** 直接调用 last30days 的 Python 引擎，它内部有三层降级：
+
+| 层 | 方式 | 说明 |
+|----|------|------|
+| Tier 0 | `.json` 端点 | 先试一次，居民 IP 可能不被封 |
+| Tier 1 | RSS feed | 主力路径，不走 API，不会被封 |
+| Tier 2 | Shreddit HTML | 解析 `<shreddit-comment>` 元素拿互动数据 |
+
+模型不需要关心 Reddit 是否被封锁——引擎内部全处理了。
+
+**流水线 A 调用（痛点搜索）：**
 
 ```bash
 # ============================================
-# 加载代理配置（从 last30days .env）
+# 1. 前置：确认 Python 3.12+ 可用
 # ============================================
-HTTPS_PROXY=$(grep '^HTTPS_PROXY=' ~/.config/last30days/.env | cut -d= -f2-)
+for py in python3.14 python3.13 python3.12 python3; do
+  command -v "$py" >/dev/null 2>&1 || continue
+  "$py" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)' || continue
+  LAST30DAYS_PYTHON="$py"
+  break
+done
 
-# 搜索子版块中的痛点讨论
-curl -s -x "$HTTPS_PROXY" -H "User-Agent: gem-hunter/1.0" \
-  "https://www.reddit.com/r/{subreddit}/search.json?q={关键词}&sort=comments&restrict_sr=on&t=year&limit=25" \
-  | python3 -c "
+if [ -z "${LAST30DAYS_PYTHON:-}" ]; then
+  echo "ERROR: Python 3.12+ required for last30days engine" >&2
+  exit 1
+fi
+
+ENGINE=~/.claude/skills/last30days/scripts/last30days.py
+
+# ============================================
+# 2. Reddit 痛点搜索（2 组关键词并行）
+# ============================================
+# 组 1：直接抱怨
+"${LAST30DAYS_PYTHON}" "$ENGINE" \
+  "{领域关键词} frustrating OR annoying OR looking for alternative" \
+  --search=reddit --subreddits={sub1,sub2,sub3} --quick --emit=json \
+  > /tmp/reddit-pain-1.json
+
+# 组 2：工具缺口 + 求助
+"${LAST30DAYS_PYTHON}" "$ENGINE" \
+  "{领域关键词} wish there was OR is there a tool OR someone should build" \
+  --search=reddit --subreddits={sub1,sub2,sub3} --quick --emit=json \
+  > /tmp/reddit-pain-2.json
+
+# ============================================
+# 3. 解析 JSON 输出（关键字段）
+# ============================================
+cat /tmp/reddit-pain-1.json | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-for p in data['data']['children']:
-    d = p['data']
-    print(f'{d[\"title\"]} | {d[\"score\"]}pts | {d[\"num_comments\"]}cmt | r/{d[\"subreddit\"]}')
-    print(f'  https://reddit.com{d[\"permalink\"]}')
+items = data.get('items_by_source', {}).get('reddit', [])
+print(f'Reddit 搜索结果: {len(items)} 条')
+for item in items[:20]:
+    eng = item.get('engagement', {})
+    print(f'{item.get(\"title\", \"?\")} | {eng.get(\"score\",0)}pts | {eng.get(\"num_comments\",0)}cmt')
+    print(f'  {item.get(\"url\", \"\")}')
     print()
 "
-
-# 搜全站（不限子版块）
-curl -s -x "$HTTPS_PROXY" -H "User-Agent: gem-hunter/1.0" \
-  "https://www.reddit.com/search.json?q={关键词}&sort=comments&t=year&limit=25"
-
-# 如果 curl 返回 HTML（<body class=theme-beta>）而非 JSON → API 被封锁
-# 降级：WebSearch "site:reddit.com {关键词}"，标注"Reddit API 被封锁，搜索引擎中转"
 ```
+
+**流水线 B 调用（社区验证——搜项目名）：**
+
+```bash
+"${LAST30DAYS_PYTHON}" "$ENGINE" \
+  "{项目名}" \
+  --search=reddit --quick --emit=json \
+  > /tmp/reddit-verify.json
+```
+
+**信号判断（同前）**：score > 20 + comments > 15 → 真讨论。多个不同帖子提到 → 交叉验证。
+
+**如果 last30days 引擎不可用**（Python 版本 < 3.12、脚本缺失等）：走降级协议，降级为 WebSearch `site:reddit.com {关键词}`。
 
 ### Hacker News（Algolia API）
 
@@ -473,30 +520,53 @@ gh search issues "frustrating OR pain point OR wish there was {领域}" --limit 
 # search_code("frustrating OR pain point", path="issues")
 ```
 
+### 小红书（last30days 引擎）—— 直连 MCP API
+
+**优先走 last30days 引擎，直连 xiaohongshu-mcp REST API。** 引擎内部调用 `xiaohongshu_api.py`，拿真实互动数据（likes/comments/favorites），不再是搜索引擎片段。
+
+**前置条件：** xiaohongshu-mcp 服务必须正在运行（`http://127.0.0.1:18060`）。
+
+**调用方式（与 Reddit 共享 Python 和 ENGINE 变量）：**
+
+```bash
+# "${LAST30DAYS_PYTHON}" 和 ENGINE 已在 Reddit 部分设置
+
+# 痛点搜索
+"${LAST30DAYS_PYTHON}" "$ENGINE" \
+  "{领域关键词} 推荐 OR 好用 OR 求推荐" \
+  --search=xiaohongshu --quick --emit=json \
+  > /tmp/xhs-pain-1.json
+
+# 解析
+cat /tmp/xhs-pain-1.json | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+items = data.get('items_by_source', {}).get('xiaohongshu', [])
+print(f'小红书搜索结果: {len(items)} 条')
+for item in items[:15]:
+    eng = item.get('engagement', {})
+    print(f'{item.get(\"title\", \"?\")} | likes={eng.get(\"likes\",0)} | comments={eng.get(\"comments\",0)} | fav={eng.get(\"favorites\",0)}')
+    print(f'  {item.get(\"url\", \"\")}')
+    print()
+"
+```
+
+**信号判断：**
+- likes + comments + favorites 综合判断，不是只看点赞数
+- 普通用户（非 KOL）的真诚推荐 → 强信号
+- 多篇不同作者提到同一工具/痛点 → 交叉验证通过
+
+**如果 MCP 服务不可用（API 返回 "No sources available"）：** 走降级协议，降级为 WebSearch `site:xiaohongshu.com {关键词}`，标注"MCP API 不可用，搜索引擎中转，信号可能偏弱"。
+
 ### V2EX（WebSearch 兜底）
+
+V2EX 没有公开 API，无其他方式。
 
 ```
 WebSearch "site:v2ex.com {关键词} 求推荐 OR 有没有 OR 替代"
 ```
 
-⚠️ 搜索引擎中转，标注"信号可能偏弱"。V2EX 没有公开 API，这是唯一方式。
-
-### 小红书（WebSearch 兜底）
-
-⚠️ **MCP API 未配置（xiaohongshu-mcp Chrome 启动兼容问题）。当前走 WebSearch 中转。**
-
-```
-WebSearch "site:xiaohongshu.com {关键词} 推荐 OR 好用 OR 工具"
-WebSearch "site:xiaohongshu.com {关键词} 求推荐 OR 安利"
-```
-
-**信号判断：**
-- 小红书笔记的点赞/收藏数通常远高于论坛帖子，需降权看待
-- 多篇不同作者的笔记提到同一工具/痛点 → 交叉验证通过
-- 单篇高赞笔记 → 中等信号，可能是算法推荐结果而非真实需求密度
-- 标注 ⚠️"MCP API 未配置，搜索引擎中转，信号可能偏弱"
-
-**后续升级路径：** 待 xiaohongshu-mcp Chrome 启动兼容问题解决后，改为直接调 `http://127.0.0.1:18060/api/v1/feeds/search` API，可获取真实互动数据（likes/comments/favorites）。
+⚠️ 搜索引擎中转，标注"信号可能偏弱"。
 
 ### 社区验证：搜项目有没有人在讨论
 
@@ -510,9 +580,11 @@ NODE_OPTIONS="--import $BOOTSTRAP" \
   "{项目名} recommend OR love OR using OR switched to since:$SINCE" \
   --count 20 --json > /tmp/x-verify.json
 
-# Reddit：搜项目名（需代理；被封锁时降级 WebSearch）
-curl -s -x "$HTTPS_PROXY" -H "User-Agent: gem-hunter/1.0" \
-  "https://www.reddit.com/search.json?q={项目名}&sort=comments&t=year&limit=10"
+# Reddit：搜项目名（last30days 引擎，自动处理封锁）
+"${LAST30DAYS_PYTHON}" "$ENGINE" \
+  "{项目名}" \
+  --search=reddit --quick --emit=json \
+  > /tmp/reddit-verify.json
 
 # HN：搜项目名
 curl -s -x "$HTTPS_PROXY" "https://hn.algolia.com/api/v1/search?query={项目名}&tags=story&hitsPerPage=10"
