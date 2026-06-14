@@ -2,13 +2,32 @@
 
 ## 数据采集核心原则
 
-**方案发现分两步：先找项目（GitHub/Fossick），再验证（Reddit/X/HN 社区讨论）。** 不用搜索引擎找项目——搜索引擎的排名机制偏向已火的项目，gem-hunter 要找的是匹配度最高的解决方案，不管 Star 多少。
+**方案发现分三层：Agent 可调用方案优先，再搜开源项目，最后社区验证。** 不用搜索引擎找项目——搜索引擎的排名机制偏向已火的项目，gem-hunter 要找的是匹配度最高的解决方案，不管 Star 多少。
 
 ---
 
 ## 信息源
 
-### GitHub 搜索（Fossick MCP —— 核心发现工具）
+### 🥇 Agent 可调用方案（Skill / MCP / Agent Tool —— 优先级最高）
+
+能直接被 agent 调用的方案，适配成 Claude Code skill 的成本极低。
+
+**搜索策略**（Fossick MCP）：
+
+| 搜索轮次 | Fossick 参数 | 目标 |
+|----------|-------------|------|
+| 第 1 轮：直接搜 skill | `search_repos(topic="claude-code-skill" + 领域 topic)` | Claude Code Skill |
+| 第 2 轮：搜 MCP | `search_repos(topic="mcp-server" + 领域 topic)` | MCP Server（协议标准，原生支持） |
+| 第 3 轮：搜 agent tool 生态 | `search_repos(topic="ai-agent-tool" ` `chatgpt-plugin` + 领域 topic) | ChatGPT Plugin / LangChain Tool |
+| 第 4 轮：搜有接口的项目 | `search_code("SKILL.md OR mcp_server OR tool_definition" + 领域关键词)` | 有现成 agent 接口的项目 |
+| 第 5 轮：扩面 | `search_code("cli tool" OR "REST API" OR "webhook" + 领域关键词)` | 有 CLI/API 可快速包装的项目 |
+
+**评估标准**（在通用标准之外额外检查）：
+- 有 SKILL.md 或等效配置 → 🟢 零适配
+- 有 CLI 或 REST API → 🟡 包装即可（10 分钟内）
+- 纯 GUI 或需要手动操作 → 🔴 适配成本高，降权
+
+### 🥈 GitHub 开源项目（Fossick MCP）
 
 核心策略：找到匹配度最高的解决方案。**不设 Star 上限——一个 2000 星的项目如果完美匹配某个痛点，比一个 20 星但解决不了问题的项目更有价值。**
 

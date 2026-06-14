@@ -212,33 +212,68 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
 ### 流水线 B：方案发现
 
-**目标**：找到 5-10 个值得关注的项目。**不设 Star 上限——判断标准是匹配度和解决真问题的能力，不是 Star 数。大厂开源项目（微软/Google/Meta/阿里）不列入（天然传播渠道，不需要 Gem Hunter 来挖）。**
+**目标**：找到 5-10 个值得关注的方案。**按适配成本排序——Agent 可直接调用的方案优先于需要从头包装的纯开源项目。** 不设 Star 上限，判断标准是匹配度和解决真问题的能力。大厂开源项目（微软/Google/Meta/阿里）不列入（天然传播渠道，不需要 Gem Hunter 来挖）。
 
 1. 加载 `references/project-sources.md`（信息源 + 搜索条件 + 评估标准 + 社区验证方法）
 2. **🔤 术语展开（搜索前强制完成，不可跳过）**：
 
-   GitHub 项目搜索同样需要术语发散。同一个工具，README 可能写 "content repurposing"，Issue 里叫 "viral post scraper"，topic 标签又是 "social-media-automation"。
+   搜索需要覆盖两个维度：Agent 可调用方案（Skill/MCP/Tool）+ GitHub 开源项目。同一个痛点，Skill 社区叫 "claude-code-skill"，MCP 社区叫 "mcp-server"，GitHub 上可能叫 "tool"、"automation"、"pipeline"。
 
    **输出格式**（必须在思考中完成并输出）：
    ```
    🔤 术语展开（方案搜索）：
    原始痛点：[用户表述]
+   Agent 方案搜索变体：
+   - skill 生态：[claude-code-skill / mcp-server / agent-tool + 关键词]
+   - 接口关键词：[CLI / API / webhook + 功能关键词]
    GitHub 搜索变体（至少 3 组）：
    - 技术术语：[英文技术关键词]
    - 场景化表述：[这个工具能干什么，用动词短语]
    - 竞品反推：[已知的类似工具名，搜 "alternative to X"]
-   Fossick topic 过滤：[具体 topic 标签]
+   Fossick topic 过滤：[claude-code-skill / mcp-server / ai-agent-tool / 领域 topic]
    ```
 
    **规则**：
-   - 至少尝试 2 种不同关键词组合搜索 `search_repos`
+   - Agent 方案和 GitHub 项目**必须分开搜**，不可混在一起
+   - 每种方案类型至少尝试 1 组关键词
+   - GitHub 项目至少尝试 2 种不同关键词组合
    - 除了搜功能关键词，还要搜 "alternative to [已知工具]" 句式
-   - 社区验证（Reddit/X/HN 搜项目名）同样需要使用变体，不能只用项目名本身
+   - 社区验证同样需要使用变体，不能只用项目名本身
 
 3. 确定搜索参数（`stars_min/max`、`topics`、`pushed_after` 等，日期根据当前时间往前推算）
-4. 执行发现 + 验证：
+4. 执行发现 + 验证（按优先级分层搜索）：
 
-   **第一步：GitHub 发现（Fossick MCP）**
+   **🥇 第一步：Agent 可调用方案（优先级最高）**
+
+   能直接被 agent 调用的方案——零配置或极低配置成本。适配成 Claude Code skill 只需包装一层。
+
+   | 方案类型 | 适配成本 | 搜索方式 |
+   |----------|----------|----------|
+   | Claude Code Skill | 零适配 | `search_repos` topic:`claude-code-skill` + 领域关键词 |
+   | MCP Server | 协议标准，原生支持 | `search_repos` topic:`mcp-server` + 领域关键词 |
+   | ChatGPT Plugin / LangChain Tool | 有现成接口，适配简单 | `search_repos` topic:`chatgpt-plugin` `ai-agent-tool` + 领域关键词 |
+   | 有 CLI/API 的项目 | 包装成 skill/MCP 即可 | `search_repos` + `search_code` "CLI" "REST API" + 领域关键词 |
+
+   **搜索策略**：
+   ```
+   # 第 1 轮：直接搜 skill/MCP
+   search_repos(topic="claude-code-skill" + 领域 topic)
+   search_repos(topic="mcp-server" + 领域 topic)
+
+   # 第 2 轮：搜 agent tool 生态
+   search_repos(topic="ai-agent-tool" + 领域 topic)
+   search_code("SKILL.md OR mcp_server OR tool_definition" + 领域关键词)
+
+   # 第 3 轮：扩面搜有接口的项目
+   search_code("cli tool" OR "REST API" OR "webhook" + 领域关键词)
+   ```
+
+   **评估标准**（在项目标准之外额外检查）：
+   - SKILL.md 或等效配置文件是否存在？是否说清楚了能做什么？
+   - 是否可直接被 agent 调用？（有 CLI/API/webhook → 可适配；纯 GUI → 降权）
+   - 适配成 Claude Code skill 的难度？（1 分钟 / 10 分钟 / 需要写代码）
+
+   **🥈 第二步：GitHub 开源项目（Fossick MCP）**
    - `search_repos` 搜候选项目（Star 10-100，近期活跃）
    - `get_file` 读 README → 判断是否说清楚了要解决的问题
    - `list_tags` 看活跃度 → 最近 3 个月有没有发版
@@ -319,13 +354,16 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
 ### 流水线 B 执行（如果跑）
 
-- [ ] 🔤 术语展开已完成并输出（至少 3 组搜索变体，含 "alternative to X" 句式）
+- [ ] 🔤 术语展开已完成并输出（Agent 方案 + GitHub 项目分别覆盖）
+- [ ] Agent 可调用方案搜索已完成（claude-code-skill / mcp-server / agent-tool 各至少搜 1 组）
+- [ ] 方案按适配成本排序：Agent 可调用方案在前，纯开源项目在后
 - [ ] `search_repos` 至少使用了 2 种不同关键词组合
-- [ ] 每个候选项目有 README 摘要（来自 get_file）
-- [ ] 每个候选项目有活跃度记录（来自 list_tags）
-- [ ] 每个候选项目有规模评估（来自 repo_tree）
+- [ ] 每个候选方案/项目有 README 摘要（来自 get_file）
+- [ ] 每个候选方案/项目有活跃度记录（来自 list_tags）
+- [ ] 每个候选方案/项目有规模评估（来自 repo_tree）
+- [ ] Skill/MCP 方案额外标注了适配成本（零适配 / 包装 CLI / 需要写代码）
 - [ ] 社区验证走了至少一轮（Reddit/X/HN 搜项目名，且使用了术语变体非仅项目名）
-- [ ] 无社区讨论的项目已标注"无社区验证"
+- [ ] 无社区讨论的方案已标注"无社区验证"
 
 ### 交叉匹配（如果做）
 
