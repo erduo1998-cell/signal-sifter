@@ -174,26 +174,63 @@ node "$BIRD" \
 
 ### 中文社区
 
-#### 小红书（WebSearch 兜底）
+#### 微信公众号/搜一搜（WebSearch `site:mp.weixin.qq.com`）
 
-⚠️ **MCP API 未配置（xiaohongshu-mcp Chrome 启动兼容问题）。当前走 WebSearch 中转。**
+微信公众号是中国传统行业（农贸、零售、制造、餐饮、房产、教育、医疗等）**一手痛点信号最密集的源**。一线从业者、行业服务商、技术团队在此输出实战总结、踩坑记录、工具测评。对于中文化领域，微信公众号的信号价值超过 X/Reddit/HN 之和。
+
+**搜索方式（WebSearch，无公开 API）：**
+
+| 搜索方式 | 用途 |
+|----------|------|
+| `site:mp.weixin.qq.com {领域} 痛点 OR 难点 OR 现状` | 直接痛点描述 |
+| `site:mp.weixin.qq.com {领域} 工具 OR 系统 OR 方案 推荐` | 工具缺口/求推荐 |
+| `site:mp.weixin.qq.com {领域} 踩坑 OR 失败 OR 数字化 反思` | 失败案例（信号最强） |
+| `site:mp.weixin.qq.com {领域} 数字化 OR 转型 OR 升级` | 行业变革中的痛点 |
+| `site:mp.weixin.qq.com {具体工具名} 使用 OR 体验 OR 测评` | 工具口碑 |
+
+**信号判断：**
+- 一线从业者写的实战总结（非厂商软文）→ **极强信号**。判断方法：文章是否列出了具体数据、具体失败原因、具体操作细节
+- 多个不同公众号不约而同提到同一痛点 → 交叉验证通过
+- 行业服务商（如畅捷通、有赞）的行业调研文章 → 中等信号（有推广动机，但调研数据通常真实可靠）
+- 纯厂商软文（满篇"解决方案"、"赋能"、"降本增效"无具体数据）→ 淘汰
+- 标注"WebSearch 中转，微信公众号源"
+
+**为什么不用 WebSearch 直接搜（不限定 site）：**
+- 不限定 `site:` 的 WebSearch 结果被 SEO 农场淹没——内容农场会用痛点关键词做标题，内容却是广告
+- `site:mp.weixin.qq.com` 限定后，结果几乎都是真人写的长文（公众号有原创机制，洗稿门槛高）
+- 如果你发现不限定 site 也能搜到高质量中文行业内容（如 `sinxinit.net`、`chanjet.com` 等行业网站），可以作为补充源
+
+#### 小红书（MCP API 直连，launchd 保活）
 
 小红书是中文互联网最大的消费决策平台，痛点信号密度高。"求推荐"、"安利"、"避雷" 类笔记的真实现象讨论非常适合 gem-hunter 的选题发现。
 
+**服务保障：** xiaohongshu-mcp 通过 macOS launchd 管理（`~/Library/LaunchAgents/xhsmcp.plist`），`KeepAlive=true` 崩溃自动重启，`RunAtLoad=false` 不占开机资源。gem-hunter 启动时按需唤醒：
+
+```bash
+# 健康检查 → 按需启动
+curl -sf http://127.0.0.1:18060/health > /dev/null 2>&1 || launchctl start xhsmcp
+
+# 登录状态验证
+curl -s http://127.0.0.1:18060/api/v1/login/status
+```
+
+**API 端点：** `POST /api/v1/feeds/search`，直接拿到带互动数据的笔记列表（likes/comments/favorites/collections），不用搜索引擎中转。
+
+**搜索方式（通过 last30days 引擎，内部调用 xiaohongshu_api.py）：**
+
 | 搜索方式 | 备注 |
 |----------|------|
-| WebSearch `site:xiaohongshu.com {关键词} 推荐 OR 好用 OR 工具` | 正向推荐帖 |
-| WebSearch `site:xiaohongshu.com {关键词} 求推荐 OR 安利` | 需求帖 |
-| WebSearch `site:xiaohongshu.com {关键词} 避雷 OR 难用 OR 踩坑` | 吐槽帖 |
+| `{关键词} 推荐 OR 好用 OR 工具` | 正向推荐帖 |
+| `{关键词} 求推荐 OR 安利` | 需求帖 |
+| `{关键词} 避雷 OR 难用 OR 踩坑` | 吐槽帖 |
 
 **信号判断：**
+- likes + comments + favorites 综合判断，不是只看点赞数
 - 多条不同作者的笔记不约而同提到同一工具/痛点 → 交叉验证 ✅
-- 单篇高赞笔记 → 中等信号（小红书算法推流可能放大单一内容）
-- 笔记互动量（点赞+收藏）高但来自 KOL → 降权（KOL 推荐不等于真实需求）
+- 笔记互动量高但来自 KOL → 降权（KOL 推荐不等于真实需求）
 - 普通用户（粉丝 < 1000）的真诚推荐 → 强信号
-- 标注 ⚠️"MCP API 未配置，搜索引擎中转，信号可能偏弱"
 
-**后续升级：** 待 xiaohongshu-mcp 可用后改为 API 直连（`POST /api/v1/feeds/search`），可获取真实互动数据而非搜索引擎片段。
+**如果服务不可用（启动失败或未登录）：** 走降级协议，**跳过此源**。WebSearch `site:xiaohongshu.com` 无法获取小红书真实内容，不降级。
 
 #### V2EX（WebSearch 兜底）
 
@@ -229,6 +266,7 @@ V2EX 没有公开 API，只能通过 WebSearch。
 | Reddit | `frustrating OR annoying OR sucks OR alternative` / `hate OR terrible OR nightmare` |
 | HN | `tool OR alternative OR looking for` / `is there a OR wish there was` |
 | GitHub | `frustrating OR pain point OR wish there was` |
+| 微信公众号 | `痛点 OR 难点 OR 现状` / `工具 OR 系统 OR 方案 推荐` / `踩坑 OR 失败 OR 数字化 反思` |
 | 小红书 | `推荐 OR 好用 OR 工具` / `求推荐 OR 安利` / `避雷 OR 难用 OR 踩坑` |
 | V2EX | `求推荐 OR 有没有 OR 替代` / `吐槽 OR 不好用 OR 难用` |
 
@@ -243,7 +281,9 @@ V2EX 没有公开 API，只能通过 WebSearch。
 
 ### 信息源优先级
 
-**第一梯队（API 直连，信号最干净）：**
+优先级不是固定的——由领域预判结果决定。以下为按领域类型的源优先级矩阵：
+
+#### 🌐 英文化领域（AI Agent、编程语言、开源工具、DevOps、安全等）
 
 | 优先级 | 源 | 原因 |
 |--------|-----|------|
@@ -251,10 +291,26 @@ V2EX 没有公开 API，只能通过 WebSearch。
 | 🟠 高 | Reddit JSON API | 讨论深度最高，长文分析多 |
 | 🟡 中高 | HN Algolia API | 技术社区信号，评论质量高 |
 | 🟢 中 | GitHub Issues | 功能缺口信号，有 👍 反应数 |
+| 🔵 辅助 | 小红书（MCP API） | 中文消费决策平台，辅助验证 |
+| ⚪ 辅助 | V2EX（WebSearch） | 中文技术社区，辅助验证 |
 
-**第二梯队（搜索引擎中转，⚠️ 信号可能偏弱）：**
-- V2EX（WebSearch）
-- 小红书（WebSearch，MCP API 未配置）
+#### 🇨🇳 中文化领域（农贸零售、餐饮、制造、房产、教育、医疗、本地生活等）
+
+| 优先级 | 源 | 原因 |
+|--------|-----|------|
+| 🔴 最高 | 微信公众号（WebSearch site:mp.weixin.qq.com） | 一手从业者实战总结，痛点信号密度最高 |
+| 🟠 高 | 小红书（MCP API，launchd 保活） | 中文消费决策平台，个体户/小商家活跃 |
+| 🟡 中高 | 中文 WebSearch（不限 site） | 行业网站、技术博客的深度分析 |
+| 🟢 中 | V2EX（WebSearch） | 中文技术社区，补充验证 |
+| ⚡ 快速验证 | X/Twitter（1 组关键词） | 中文化领域英文讨论极少，1 组无信号直接跳过 |
+| ⚡ 快速验证 | Reddit（1 组关键词） | 同上 |
+| ⚡ 快速验证 | HN（1 组关键词） | 同上 |
+
+**中文化领域降级规则**：英文源（X/Reddit/HN）在中文化领域只需 1 组关键词快速验证。无信号直接跳过，**无需走完整降级协议**（不需要 2 次搜索 + AskUserQuestion）。这一条是降级协议的豁免——中文化领域的英文源天然不适配，死磕没有意义。
+
+#### 🔀 混合领域（跨境电商、出海工具、AI 应用、远程工作、SaaS 等）
+
+全部源并行，各 1 组关键词。首轮后根据实际信号密度决定侧重方向。
 
 ### 不使用的源
 

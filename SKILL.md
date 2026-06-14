@@ -50,7 +50,7 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
 ### 痛点和方案是两件事，分开挖
 
-- **痛点**来自人在网上的抱怨、求推荐、吐槽——信号在 X/Twitter（Bird 引擎）、Reddit（last30days 引擎，三层降级防封锁）、HN Algolia API、GitHub Issues、小红书（last30days 引擎，直连 MCP API）、V2EX（WebSearch 兜底）
+- **痛点**来自人在网上的抱怨、求推荐、吐槽——信号在 X/Twitter（Bird 引擎）、Reddit（last30days 引擎，三层降级防封锁）、HN Algolia API、GitHub Issues、小红书（last30days 引擎，直连 MCP API）、微信公众号（WebSearch site:mp.weixin.qq.com）、V2EX（WebSearch 兜底）
 - **方案**来自 GitHub 的角落——Fossick MCP 扫小众仓库，Reddit/X/HN 做社区验证
 
 ### 痛点要对，不能大
@@ -70,7 +70,7 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
 ## 技能
 
-- **多源扫描**：痛点源（X/Twitter Bird、Reddit via last30days 引擎、HN Algolia、GitHub Issues、小红书 via last30days 引擎、V2EX WebSearch）和方案源（Fossick MCP + Reddit/X/HN 社区验证）分开扫描，API 直连拿到带互动数据的一手内容
+- **多源扫描**：痛点源（X/Twitter Bird、Reddit via last30days 引擎、HN Algolia、GitHub Issues、小红书 via last30days 引擎、微信公众号、V2EX WebSearch）和方案源（Fossick MCP + Reddit/X/HN 社区验证 + Gitee）分开扫描，API 直连拿到带互动数据的一手内容
 - **痛点识别**：区分"一次性抱怨"和"结构性痛点"，过滤假信号
 - **项目评估**：不看 Star 数，看解决问题的能力和活跃度
 - **交叉匹配**：把痛点和对策连起来，标注匹配度
@@ -82,8 +82,34 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
    - 提到"痛点"、"问题"、"需求"、"抱怨" → 启动流水线 A（痛点发现）
    - 提到"项目"、"方案"、"工具"、"开源" → 启动流水线 B（方案发现）
    - 提到"选题"、"推荐"、"挖掘"、"搜一下" → 两条都启动
-2. 涉及具体领域（如"AI agent"、"文件同步"），将领域关键词注入搜索条件
-3. 不涉及具体领域，做宽泛扫描
+2. **🧭 领域预判（搜索前强制完成，决定源优先级）：**
+
+   根据领域关键词判断信息生态偏向，调整源优先级。不做预判直接搜 = 大量噪音或遗漏信号。
+
+   | 领域类型 | 典型领域 | 源优先级（高→低） | 降级策略 |
+   |----------|---------|------------------|---------|
+   | 🌐 **英文化** | AI Agent、编程语言、开源工具、DevOps、安全、数据库 | X / Reddit / HN → 小红书 / V2EX → 微信公众号 | 中文源为辅助验证，可快速跳过 |
+   | 🇨🇳 **中文化** | 农贸零售、餐饮、制造、房产、教育、医疗、本地生活、财税 | 微信公众号 / 小红书 / 中文 WebSearch → 快速验证英文源 → 跳过 | 英文源 1 轮无信号直接跳过，不浪费搜索预算 |
+   | 🔀 **混合** | 跨境电商、出海工具、AI 应用、远程工作、SaaS | 全部源并行，各 1 组关键词 | 首轮后根据信号密度决定侧重方向 |
+
+   **预判输出格式**（必须在思考中完成并输出）：
+   ```
+   🧭 领域预判：
+   领域：[用户输入的关键词]
+   类型：[英文化 / 中文化 / 混合]
+   依据：[为什么这样判断——信息生态在哪个语言圈]
+   源优先级调整：
+   - 主力源：[列出]
+   - 辅助源：[列出]
+   - 快速验证后跳过（如有）：[列出]
+   ```
+
+   **规则**：
+   - 中文化领域：微信公众号 + 小红书 + 中文 WebSearch 为**主力**，英文源（X/Reddit/HN）**快速验证**（1 组关键词即可，无信号直接跳过，无需走完整降级协议）
+   - 英文化领域：保持默认优先级，中文源为辅助
+   - 混合领域：全部源并行，首轮后根据实际信号密度调整
+3. 涉及具体领域（如"AI agent"、"文件同步"），将领域关键词注入搜索条件
+4. 不涉及具体领域，做宽泛扫描
 
 ## 🚨 降级协议 —— 跳过源的唯一合法方式
 
@@ -134,8 +160,8 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
 ### 合理跳过的情况（仍需走降级通知）
 
-- last30days 引擎不可用（Python < 3.12 或脚本缺失）→ 降级为 WebSearch `site:reddit.com` 或 `site:xiaohongshu.com`
-- 小红书 MCP 服务不可用 → 降级为 WebSearch `site:xiaohongshu.com`
+- last30days 引擎不可用（Python < 3.12 或脚本缺失）→ 降级为 WebSearch `site:reddit.com`（小红书不走 WebSearch，跳过）
+- 小红书 MCP 服务不可用（启动失败或未登录）→ 走降级协议，标注"小红书不可用"，跳过此源（WebSearch 对小红书无效，不降级）
 - X AUTH_TOKEN/CT0 不可用 → 降级为 WebSearch `site:x.com`
 - Node.js 不可用（Bird 引擎需要）→ 降级为 WebSearch `site:x.com`
 
@@ -152,7 +178,9 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
    拿到用户关键词后，先发散再搜索。直接搬运用户原始词汇去搜 = 遗漏大量信号。
 
-   **输出格式**（必须在思考中完成并输出）：
+   **根据领域预判选择术语展开策略：**
+
+   **🌐 英文化领域：**
    ```
    🔤 术语展开：
    原始输入：[用户的原始表述]
@@ -168,28 +196,60 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
    - V2EX → [变体H]（中文求推荐体）
    ```
 
+   **🇨🇳 中文化领域：**
+   ```
+   🔤 术语展开：
+   原始输入：[用户的原始表述]
+   搜索变体（至少 3 组）：
+   - 中文-行业术语：用于微信公众号/中文WebSearch（行业内黑话、痛点关键词）
+   - 中文-场景化描述：用于微信公众号/小红书（"XX行业的痛点"、"做XX的人都在愁什么"）
+   - 中文-求推荐体：用于小红书/微信公众号（"求推荐"、"有没有做XX的工具"）
+   各源分配：
+   - 微信公众号 → [变体A, 变体B]（行业术语 + 场景化描述）
+   - 小红书 → [变体C, 变体D]（求推荐体 + 场景化描述）
+   - X/Reddit/HN → [变体E]（仅1组英文翻译，快速验证）
+   - V2EX → [变体F]（求推荐体，1组）
+   ```
+
    **规则**：
    - 每个信息源至少使用 1 组专属变体，不可全源用同一组词
-   - 英文源必须覆盖：技术术语 + 口语化抱怨两种风格
-   - 中文源必须覆盖：推荐体 + 求替代体两种风格
+   - 英文化领域：英文源必须覆盖技术术语 + 口语化抱怨两种风格；中文源必须覆盖推荐体 + 求替代体
+   - 中文化领域：中文源必须覆盖行业术语 + 场景化描述 + 求推荐体三种风格；英文源仅需 1 组翻译
    - 变体数量不够（< 3 组）→ 继续发散，直到覆盖上述风格
 
-3. **只搜个人求助和吐槽**，**不搜行业分析媒体**（VentureBeat、a16z、学术论文等——它们在输出趋势，不是痛点）
-4. 按以下优先级并行搜索（API 直连优先，WebSearch 兜底）：
+3. 按以下优先级并行搜索。**优先级由领域预判结果决定：**
 
-   **第一梯队 —— API 直连（信号最干净）：**
-
+   **🌐 英文化领域 — 默认优先级：**
+   
    | 优先级 | 源 | 工具 | 搜几次 |
    |--------|-----|------|--------|
    | 🔴 最高 | X/Twitter | `node bird-search.mjs` + AUTH_TOKEN/CT0 | 2 组关键词 × 30 条 |
    | 🟠 高 | Reddit | `last30days.py --search=reddit`（三层降级：JSON→RSS→Shreddit） | 2 组关键词 × 25 条 |
    | 🟡 中高 | HN | `curl` Algolia API | 2 组 tags × 20 条 |
    | 🟢 中 | 小红书 | `last30days.py --search=xiaohongshu`（直连 xiaohongshu-mcp API） | 1-2 组关键词 × 15 条 |
-
+   
    **第二梯队 —— WebSearch 兜底：**
-   - V2EX：`site:v2ex.com` WebSearch（V2EX 无公开 API，唯一方式）
+   - V2EX：`site:v2ex.com` WebSearch | 1-2 组关键词 × 20 条
    - GitHub Issues：Fossick `search_code` 或 `gh search issues` | 1-2 组关键词 × 20 条
-
+   
+   **🇨🇳 中文化领域 — 反转优先级：**
+   
+   | 优先级 | 源 | 工具 | 搜几次 |
+   |--------|-----|------|--------|
+   | 🔴 最高 | 微信公众号 | WebSearch `site:mp.weixin.qq.com` | 2-3 组关键词 × 20 条 |
+   | 🟠 高 | 小红书 | `last30days.py --search=xiaohongshu`（直连 MCP API） | 2 组关键词 × 15 条 |
+   | 🟡 中高 | 中文 WebSearch | 行业关键词宽搜（不限定 site） | 2 组关键词 × 15 条 |
+   | 🟢 中 | V2EX | `site:v2ex.com` WebSearch | 1 组关键词 × 20 条 |
+   
+   **快速验证（1 组即可，无信号直接跳过）：**
+   - X/Twitter：1 组英文翻译 × 30 条 → 无信号则跳过（中文化领域英文讨论极少）
+   - Reddit：1 组英文翻译 × 25 条 → 同上
+   - HN：1 组英文翻译 × 20 条 → 同上
+   
+   > **⚠️ 中文化领域注意**：微信公众号文章不是"行业分析媒体"——它们是一线从业者写的实战总结、踩坑记录、工具测评。中文化领域的一手痛点信号不在英文论坛，在微信生态。
+   
+   **🔀 混合领域：** 全部源并行，各 1 组关键词。首轮后根据实际信号密度决定侧重方向。
+   
    **加载 X 认证（Bird 引擎）：**
    ```bash
    # 从 last30days .env 读取认证和代理配置（用 cut 避免 subshell 问题）
@@ -197,18 +257,18 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
    CT0=$(grep '^CT0=' ~/.config/last30days/.env | cut -d= -f2-)
    HTTPS_PROXY=$(grep '^HTTPS_PROXY=' ~/.config/last30days/.env | cut -d= -f2-)
    ```
-
+   
    如果 AUTH_TOKEN/CT0 不可用，X 降级为 WebSearch `site:x.com` 兜底，标注"X 未认证，信号偏弱"。
-
-5. 每源搜 1-2 组关键词，总候选控制在 80-150 条，阅读内容
-6. 按判断标准过滤，**第一关就是粒度**：
+   
+4. 每源搜 1-2 组关键词，总候选控制在 80-150 条，阅读内容
+5. 按判断标准过滤，**第一关就是粒度**：
    - 这个问题是一个具体的人在一个具体场景下遇到的具体问题吗？能用一个工具解决吗？
    - 如果答案是"这是行业趋势"——直接淘汰
    - 是真痛点还是假痛点？
    - **互动数据是硬指标**：X 推文 likes>50+replies>10、Reddit score>20+comments>15 → 真有人在讨论
    - 有交叉验证吗？（多个源提到同一问题）
    - 有时效性吗？（太旧的痛点可能已解决）
-7. 输出痛点卡片列表
+6. 输出痛点卡片列表
 
 ### 流水线 B：方案发现
 
@@ -345,11 +405,14 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
 ### 流水线 A 执行（如果跑）
 
-- [ ] 🔤 术语展开已完成并输出（至少 3 组变体，覆盖技术术语/口语化抱怨/中文推荐体）
+- [ ] 🧭 领域预判已完成并输出（英文化/中文化/混合，含依据和源优先级调整）
+- [ ] 🔤 术语展开已完成并输出（英文化领域 ≥3 组变体；中文化领域覆盖行业术语+场景化描述+求推荐体）
 - [ ] 不同信息源使用了不同搜索变体（非全源同一组词）
+- [ ] 中文化领域：微信公众号已搜索（2-3 组关键词），英文源已快速验证（1 组即可）
+- [ ] 英文化领域：X/Reddit/HN 已搜索，中文源为辅助
 - [ ] 每个规定源至少执行了 1 次搜索，搜索结果在报告中可见
-- [ ] 每个跳过的源有降级通知记录
-- [ ] 每个痛点附带了互动数据（X likes/replies、Reddit score/comments 等）
+- [ ] 每个跳过的源有降级通知记录（中文化领域英文源快速跳过需标注原因）
+- [ ] 每个痛点附带了互动数据（X likes/replies、Reddit score/comments 等；微信公众号/小红书附互动数据或文章质量判断）
 - [ ] 每个痛点附带了至少 1 个来源链接
 
 ### 流水线 B 执行（如果跑）
@@ -399,8 +462,8 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 - **X auth 不可用**（AUTH_TOKEN/CT0 缺失）：降级为 WebSearch `site:x.com` 兜底，标注"X 未认证，信号偏弱"。提示用户运行 last30days setup wizard 提取浏览器 cookie
 - **Reddit 搜索**：走 last30days 引擎，内部自动三层降级（`.json` → RSS feed → Shreddit HTML），模型不需要关心封锁问题。
 - **Node.js 不可用**（Bird 引擎需要）：跳过 X API 路径，降级为 WebSearch `site:x.com`
-- **小红书搜索**：优先走 last30days 引擎（`--search=xiaohongshu`，直连 MCP API）；MCP 服务不可用时 → 走降级协议，降级为 WebSearch `site:xiaohongshu.com` 兜底，标注"MCP API 不可用，搜索引擎中转"
-- **last30days 引擎调用失败**（Python 版本不对、脚本缺失等）：降级为 WebSearch `site:reddit.com` 或 `site:xiaohongshu.com`，标注"搜索引擎中转"
+- **小红书搜索**：先走预检（健康检查 → `launchctl start xhsmcp` → 登录状态验证）。服务正常则走 last30days 引擎（`--search=xiaohongshu`，直连 MCP API）；启动失败或未登录 → 走降级协议，**跳过此源**（WebSearch 对小红书无效，不降级）
+- **last30days 引擎调用失败**（Python 版本不对、脚本缺失等）：降级为 WebSearch `site:reddit.com`，标注"搜索引擎中转"（小红书不走 WebSearch 降级，WebSearch 对小红书无效）
 - **所有源都搜不到**：扩大时间范围（6→12 个月），放宽搜索条件；仍无结果则如实报告"本轮扫描未发现匹配结果"
 - **结果太少（< 3 个）**：标注"信号弱"，建议换个领域或扩大搜索范围
 
@@ -609,11 +672,58 @@ gh search issues "frustrating OR pain point OR wish there was {领域}" --limit 
 
 ### 小红书（last30days 引擎）—— 直连 MCP API
 
-**优先走 last30days 引擎，直连 xiaohongshu-mcp REST API。** 引擎内部调用 `xiaohongshu_api.py`，拿真实互动数据（likes/comments/favorites），不再是搜索引擎片段。
+**直连 xiaohongshu-mcp REST API，拿真实互动数据（likes/comments/favorites）。**
 
-**前置条件：** xiaohongshu-mcp 服务必须正在运行（`http://127.0.0.1:18060`）。
+xiaohongshu-mcp 通过 **launchd** 管理生命周期：`KeepAlive=true` 保活，崩溃自动重启，`RunAtLoad=false` 不占开机资源。gem-hunter 启动时按需唤醒。
 
-**调用方式（与 Reddit 共享 Python 和 ENGINE 变量）：**
+**⚠️ 小红书搜索前必须执行以下预检（不可跳过）：**
+
+```bash
+# ============================================
+# 0. 预检：确保 xiaohongshu-mcp 在线且已登录
+# ============================================
+
+# 0a. 健康检查 —— 服务在不在？
+if ! curl -sf http://127.0.0.1:18060/health > /dev/null 2>&1; then
+  echo "xiaohongshu-mcp 未运行，正在启动..."
+  launchctl start xhsmcp 2>/dev/null || {
+    # launchd 未加载（首次使用），直接启动二进制
+    XHS_PROXY=$(grep '^HTTPS_PROXY=' ~/.config/last30days/.env | cut -d= -f2-)
+    COOKIES_PATH=/tmp/cookies.json \
+      nohup /Users/erduo/.local/bin/xiaohongshu-mcp > /tmp/xhsmcp.log 2>/tmp/xhsmcp.err &
+  }
+  # 等待服务就绪（最多 10 秒）
+  for i in $(seq 1 10); do
+    curl -sf http://127.0.0.1:18060/health > /dev/null 2>&1 && break
+    sleep 1
+  done
+fi
+
+# 0b. 登录状态检查
+LOGIN_STATUS=$(curl -sf http://127.0.0.1:18060/api/v1/login/status)
+IS_LOGGED_IN=$(echo "$LOGIN_STATUS" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['is_logged_in'])")
+
+if [ "$IS_LOGGED_IN" != "True" ]; then
+  echo ""
+  echo "╔══════════════════════════════════════════════╗"
+  echo "║ ⚠️ 小红书未登录                              ║"
+  echo "║                                              ║"
+  echo "║ 请在终端中运行：                              ║"
+  echo "║   ~/.local/bin/xiaohongshu-login             ║"
+  echo "║                                              ║"
+  echo "║ 扫码登录后回到这里继续。                      ║"
+  echo "╚══════════════════════════════════════════════╝"
+  echo ""
+  # 不退出——提示用户登录后继续。如果用户选择跳过，降级通知。
+  # 实际上 gem-hunter 运行在非交互模式，这里应走降级协议。
+fi
+```
+
+**如果步骤 0a 失败**（服务无法启动，端口 18060 仍无响应）→ 走降级协议，标注"xiaohongshu-mcp 启动失败"。
+
+**如果步骤 0b 失败**（未登录）→ 走降级协议，标注"小红书未登录，需运行 xiaohongshu-login 扫码"。
+
+**预检通过后，正常调用（与 Reddit 共享 Python 和 ENGINE 变量）：**
 
 ```bash
 # "${LAST30DAYS_PYTHON}" 和 ENGINE 已在 Reddit 部分设置
@@ -643,7 +753,33 @@ for item in items[:15]:
 - 普通用户（非 KOL）的真诚推荐 → 强信号
 - 多篇不同作者提到同一工具/痛点 → 交叉验证通过
 
-**如果 MCP 服务不可用（API 返回 "No sources available"）：** 走降级协议，降级为 WebSearch `site:xiaohongshu.com {关键词}`，标注"MCP API 不可用，搜索引擎中转，信号可能偏弱"。
+### 微信公众号/搜一搜（WebSearch `site:mp.weixin.qq.com`）
+
+微信公众号是中国传统行业（农贸、零售、制造、餐饮、房产、教育等）一手痛点信号最密集的源。一线从业者、行业服务商、技术团队在此输出实战总结、踩坑记录、工具测评。
+
+**没有公开 API，走 WebSearch。** 但微信生态内容的信号价值远高于通用 WebSearch——公众号文章是长文深度内容，不是 SEO 驱动的农场文。
+
+```bash
+# ============================================
+# 微信公众号痛点搜索（2-3 组关键词并行）
+# ============================================
+
+# 组 1：行业 + 痛点关键词（直接抱怨/现状描述）
+WebSearch "site:mp.weixin.qq.com {领域} 痛点 OR 难点 OR 现状"
+
+# 组 2：行业 + 工具缺口（求推荐/求方案）
+WebSearch "site:mp.weixin.qq.com {领域} 工具 OR 系统 OR 方案 推荐"
+
+# 组 3：行业 + 踩坑/反思（失败案例信号最强）
+WebSearch "site:mp.weixin.qq.com {领域} 踩坑 OR 失败 OR 数字化 反思"
+```
+
+**信号判断：**
+- 一线从业者写的实战总结（非厂商软文）→ 强信号。判断方法：文章是否列出了具体数据、具体失败原因、具体操作细节
+- 多个不同公众号不约而同提到同一痛点 → 交叉验证，极强信号
+- 行业服务商（如畅捷通、有赞等）的行业调研文章 → 中等信号（有推广动机，但调研数据通常真实）
+- 纯厂商软文（满篇"解决方案"、"赋能"、"降本增效"无具体数据）→ 淘汰
+- 标注"WebSearch 中转，微信公众号源"
 
 ### V2EX（WebSearch 兜底）
 
