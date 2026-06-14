@@ -216,7 +216,9 @@ curl -s http://127.0.0.1:18060/api/v1/login/status
 
 **API 端点：** `POST /api/v1/feeds/search`，直接拿到带互动数据的笔记列表（likes/comments/favorites/collections），不用搜索引擎中转。
 
-**搜索方式（通过 last30days 引擎，内部调用 xiaohongshu_api.py）：**
+**搜索方式（直接 `curl` POST MCP API，绕过 last30days）：**
+
+> ⚠️ last30days 引擎暂未对接小红书数据源。gem-hunter 直接用 `curl -X POST http://127.0.0.1:18060/api/v1/feeds/search` 调 MCP API 搜索端点。
 
 | 搜索方式 | 备注 |
 |----------|------|

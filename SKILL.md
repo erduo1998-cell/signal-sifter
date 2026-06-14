@@ -1,6 +1,6 @@
 ---
 name: gem-hunter
-description: 当用户想挖掘小众开源项目选题、搜索痛点问题、寻找 agent 可用的解决方案时使用。两条独立流水线——痛点发现（X/Twitter Bird + Reddit via last30days 引擎 + HN Algolia + 小红书 via last30days 引擎 + V2EX）和方案发现（Fossick MCP + Reddit/X/HN 社区验证），最后交叉匹配输出"痛点→方案"配对报告。
+description: 当用户想挖掘小众开源项目选题、搜索痛点问题、寻找 agent 可用的解决方案时使用。两条独立流水线——痛点发现（X/Twitter Bird + Reddit via last30days 引擎 + HN Algolia + 小红书（MCP API 直连） + V2EX）和方案发现（Fossick MCP + Reddit/X/HN 社区验证），最后交叉匹配输出"痛点→方案"配对报告。
 ---
 
 # Gem Hunter（猎手）
@@ -50,7 +50,7 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
 ### 痛点和方案是两件事，分开挖
 
-- **痛点**来自人在网上的抱怨、求推荐、吐槽——信号在 X/Twitter（Bird 引擎）、Reddit（last30days 引擎，三层降级防封锁）、HN Algolia API、GitHub Issues、小红书（last30days 引擎，直连 MCP API）、微信公众号（WebSearch site:mp.weixin.qq.com）、V2EX（WebSearch 兜底）
+- **痛点**来自人在网上的抱怨、求推荐、吐槽——信号在 X/Twitter（Bird 引擎）、Reddit（last30days 引擎，三层降级防封锁）、HN Algolia API、GitHub Issues、小红书（MCP API 直连，绕过 last30days）、微信公众号（WebSearch site:mp.weixin.qq.com）、V2EX（WebSearch 兜底）
 - **方案**来自 GitHub 的角落——Fossick MCP 扫小众仓库，Reddit/X/HN 做社区验证
 
 ### 痛点要对，不能大
@@ -70,7 +70,7 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
 ## 技能
 
-- **多源扫描**：痛点源（X/Twitter Bird、Reddit via last30days 引擎、HN Algolia、GitHub Issues、小红书 via last30days 引擎、微信公众号、V2EX WebSearch）和方案源（Fossick MCP + Reddit/X/HN 社区验证 + Gitee）分开扫描，API 直连拿到带互动数据的一手内容
+- **多源扫描**：痛点源（X/Twitter Bird、Reddit via last30days 引擎、HN Algolia、GitHub Issues、小红书（MCP API 直连）、微信公众号、V2EX WebSearch）和方案源（Fossick MCP + Reddit/X/HN 社区验证 + Gitee）分开扫描，API 直连拿到带互动数据的一手内容
 - **痛点识别**：区分"一次性抱怨"和"结构性痛点"，过滤假信号
 - **项目评估**：不看 Star 数，看解决问题的能力和活跃度
 - **交叉匹配**：把痛点和对策连起来，标注匹配度
@@ -226,7 +226,7 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
    | 🔴 最高 | X/Twitter | `node bird-search.mjs` + AUTH_TOKEN/CT0 | 2 组关键词 × 30 条 |
    | 🟠 高 | Reddit | `last30days.py --search=reddit`（三层降级：JSON→RSS→Shreddit） | 2 组关键词 × 25 条 |
    | 🟡 中高 | HN | `curl` Algolia API | 2 组 tags × 20 条 |
-   | 🟢 中 | 小红书 | `last30days.py --search=xiaohongshu`（直连 xiaohongshu-mcp API） | 1-2 组关键词 × 15 条 |
+   | 🟢 中 | 小红书 | `curl` POST MCP API（绕过 last30days） | 1-2 组关键词 × 15 条 |
    
    **第二梯队 —— WebSearch 兜底：**
    - V2EX：`site:v2ex.com` WebSearch | 1-2 组关键词 × 20 条
@@ -237,7 +237,7 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
    | 优先级 | 源 | 工具 | 搜几次 |
    |--------|-----|------|--------|
    | 🔴 最高 | 微信公众号 | WebSearch `site:mp.weixin.qq.com` | 2-3 组关键词 × 20 条 |
-   | 🟠 高 | 小红书 | `last30days.py --search=xiaohongshu`（直连 MCP API） | 2 组关键词 × 15 条 |
+   | 🟠 高 | 小红书 | `curl` POST MCP API（绕过 last30days） | 2 组关键词 × 15 条 |
    | 🟡 中高 | 中文 WebSearch | 行业关键词宽搜（不限定 site） | 2 组关键词 × 15 条 |
    | 🟢 中 | V2EX | `site:v2ex.com` WebSearch | 1 组关键词 × 20 条 |
    
@@ -462,7 +462,7 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 - **X auth 不可用**（AUTH_TOKEN/CT0 缺失）：降级为 WebSearch `site:x.com` 兜底，标注"X 未认证，信号偏弱"。提示用户运行 last30days setup wizard 提取浏览器 cookie
 - **Reddit 搜索**：走 last30days 引擎，内部自动三层降级（`.json` → RSS feed → Shreddit HTML），模型不需要关心封锁问题。
 - **Node.js 不可用**（Bird 引擎需要）：跳过 X API 路径，降级为 WebSearch `site:x.com`
-- **小红书搜索**：先走预检（健康检查 → `launchctl start xhsmcp` → 登录状态验证）。服务正常则走 last30days 引擎（`--search=xiaohongshu`，直连 MCP API）；启动失败或未登录 → 走降级协议，**跳过此源**（WebSearch 对小红书无效，不降级）
+- **小红书搜索**：先走预检（健康检查 → `launchctl start xhsmcp` → 登录状态验证）。服务正常则直接 `curl` POST MCP API（绕过 last30days）；启动失败或未登录 → 走降级协议，**跳过此源**（WebSearch 对小红书无效，不降级）
 - **last30days 引擎调用失败**（Python 版本不对、脚本缺失等）：降级为 WebSearch `site:reddit.com`，标注"搜索引擎中转"（小红书不走 WebSearch 降级，WebSearch 对小红书无效）
 - **所有源都搜不到**：扩大时间范围（6→12 个月），放宽搜索条件；仍无结果则如实报告"本轮扫描未发现匹配结果"
 - **结果太少（< 3 个）**：标注"信号弱"，建议换个领域或扩大搜索范围
@@ -670,9 +670,11 @@ gh search issues "frustrating OR pain point OR wish there was {领域}" --limit 
 # search_code("frustrating OR pain point", path="issues")
 ```
 
-### 小红书（last30days 引擎）—— 直连 MCP API
+### 小红书（直接调 MCP API，绕过 last30days）
 
 **直连 xiaohongshu-mcp REST API，拿真实互动数据（likes/comments/favorites）。**
+
+> ⚠️ last30days 引擎暂未对接小红书数据源。gem-hunter 直接用 `curl` 调 xiaohongshu-mcp 的搜索端点，不经过 last30days pipeline。
 
 xiaohongshu-mcp 通过 **launchd** 管理生命周期：`KeepAlive=true` 保活，崩溃自动重启，`RunAtLoad=false` 不占开机资源。gem-hunter 启动时按需唤醒。
 
@@ -723,30 +725,64 @@ fi
 
 **如果步骤 0b 失败**（未登录）→ 走降级协议，标注"小红书未登录，需运行 xiaohongshu-login 扫码"。
 
-**预检通过后，正常调用（与 Reddit 共享 Python 和 ENGINE 变量）：**
+**预检通过后，直接调 MCP API（不经过 last30days）：**
 
 ```bash
-# "${LAST30DAYS_PYTHON}" 和 ENGINE 已在 Reddit 部分设置
+# ============================================
+# 小红书痛点搜索（直接 curl MCP API，2 组关键词并行）
+# ============================================
 
-# 痛点搜索
-"${LAST30DAYS_PYTHON}" "$ENGINE" \
-  "{领域关键词} 推荐 OR 好用 OR 求推荐" \
-  --search=xiaohongshu --quick --emit=json \
+# 组 1：推荐/求推荐体
+curl -s -X POST http://127.0.0.1:18060/api/v1/feeds/search \
+  -H 'Content-Type: application/json' \
+  -d '{"keyword":"{领域关键词} 推荐 OR 好用 OR 求推荐","sort_type":"general","page":1,"page_size":15}' \
   > /tmp/xhs-pain-1.json
 
-# 解析
-cat /tmp/xhs-pain-1.json | python3 -c "
+# 组 2：避雷/踩坑体
+curl -s -X POST http://127.0.0.1:18060/api/v1/feeds/search \
+  -H 'Content-Type: application/json' \
+  -d '{"keyword":"{领域关键词} 避雷 OR 难用 OR 踩坑","sort_type":"general","page":1,"page_size":15}' \
+  > /tmp/xhs-pain-2.json
+
+# ============================================
+# 解析（MCP API 原始格式，不是 last30days 格式）
+# ============================================
+for f in /tmp/xhs-pain-1.json /tmp/xhs-pain-2.json; do
+  python3 -c "
 import sys, json
-data = json.load(sys.stdin)
-items = data.get('items_by_source', {}).get('xiaohongshu', [])
-print(f'小红书搜索结果: {len(items)} 条')
-for item in items[:15]:
-    eng = item.get('engagement', {})
-    print(f'{item.get(\"title\", \"?\")} | likes={eng.get(\"likes\",0)} | comments={eng.get(\"comments\",0)} | fav={eng.get(\"favorites\",0)}')
-    print(f'  {item.get(\"url\", \"\")}')
+with open('$f') as fh:
+    data = json.load(fh)
+feeds = data.get('data', {}).get('feeds', [])
+print(f'$f: {len(feeds)} 条')
+for feed in feeds[:15]:
+    nc = feed.get('noteCard', {})
+    ii = nc.get('interactInfo', {})
+    user = nc.get('user', {})
+    print(f'{nc.get(\"displayTitle\",\"?\")[:80]}')
+    print(f'  作者: {user.get(\"nickname\",\"?\")} | likes={ii.get(\"likedCount\",0)} | comments={ii.get(\"commentCount\",0)} | collect={ii.get(\"collectedCount\",0)}')
+    print(f'  id={feed.get(\"id\",\"?\")}')
     print()
 "
+done
 ```
+
+**API 请求参数：**
+| 参数 | 说明 |
+|------|------|
+| `keyword` | 搜索关键词，中文 |
+| `sort_type` | `general`（综合）/ `time`（最新）/ `popularity`（最热） |
+| `page` | 页码，从 1 开始 |
+| `page_size` | 每页条数，推荐 15 |
+
+**响应字段（关键）：**
+| 字段路径 | 含义 |
+|----------|------|
+| `data.feeds[].noteCard.displayTitle` | 笔记标题 |
+| `data.feeds[].noteCard.interactInfo.likedCount` | 点赞数 |
+| `data.feeds[].noteCard.interactInfo.commentCount` | 评论数 |
+| `data.feeds[].noteCard.interactInfo.collectedCount` | 收藏数 |
+| `data.feeds[].noteCard.user.nickname` | 作者昵称 |
+| `data.feeds[].id` | 笔记 ID（可拼 URL：`https://www.xiaohongshu.com/explore/{id}`） |
 
 **信号判断：**
 - likes + comments + favorites 综合判断，不是只看点赞数
