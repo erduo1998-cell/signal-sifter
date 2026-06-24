@@ -10,16 +10,11 @@
 
 ## 信息源
 
-### Reddit（JSON API，免费，无需认证）
+### Reddit（last30days 引擎，三层降级）
 
-Reddit 提供免费 JSON API，只需加 User-Agent。返回按热度/评论数排序的帖子，带 score（赞数）和 num_comments（评论数）。
+Reddit 讨论深度最高、长文分析多，是痛点信号最强的源之一。返回按热度/评论数排序的帖子，带 score（赞数）和 num_comments（评论数）。
 
-⚠️ **Reddit 的 shreddit 反爬系统可能封锁代理 IP，`.json` API 返回 HTML 空壳而非 JSON。** 遇到此情况自动降级为 WebSearch `site:reddit.com` 兜底，标注"Reddit API 被封锁，搜索引擎中转"。
-
-**API 端点：**
-```
-https://www.reddit.com/r/{subreddit}/search.json?q={关键词}&sort=comments&restrict_sr=on&t=year&limit=25
-```
+⚠️ **gem-hunter 不手动调 Reddit API，直接调用 last30days 引擎。** 引擎内部三层降级自动处理 Reddit 的 shreddit 反爬封锁（`.json` → RSS → Shreddit HTML），模型不需要手动检测 HTML 空壳或自己降级。**具体调用命令见 SKILL.md「数据采集 API 指南」Reddit 章节。**
 
 **子版块与搜索关键词：**
 
@@ -32,24 +27,7 @@ https://www.reddit.com/r/{subreddit}/search.json?q={关键词}&sort=comments&res
 | r/foss | `alternative to OR looking for` | 自由开源软件社区的替代方案讨论 |
 | r/privacy | `tool OR alternative OR self hosted` | 隐私工具需求 |
 
-**调用方式：**
-```bash
-# 加载代理配置
-HTTPS_PROXY=$(grep '^HTTPS_PROXY=' ~/.config/last30days/.env | cut -d= -f2-)
-
-curl -s -x "$HTTPS_PROXY" -H "User-Agent: gem-hunter/1.0" \
-  "https://www.reddit.com/r/selfhosted/search.json?q=frustrating+OR+annoying+OR+sucks&sort=comments&restrict_sr=on&t=year&limit=25" \
-  | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-for p in data['data']['children']:
-    d = p['data']
-    print(f'{d[\"title\"]} | {d[\"score\"]}pts | {d[\"num_comments\"]}cmt | r/{d[\"subreddit\"]}')
-"
-
-# 如果 curl 返回 HTML（<body class=theme-beta>）而非 JSON → API 被封锁
-# 降级：WebSearch "site:reddit.com {关键词}"，标注"Reddit API 被封锁，搜索引擎中转"
-```
+**调用方式：** Reddit 走 last30days 引擎（不手动 curl）。痛点搜索 2 组关键词并行、JSON 解析字段、子版块参数等完整 bash 命令，见 **SKILL.md「数据采集 API 指南」Reddit 章节**（流水线 A 调用）。引擎不可用时（Python < 3.12 等）走降级协议，降级为 WebSearch `site:reddit.com {关键词}`。
 
 **信号判断：**
 - `score`（赞数）和 `num_comments`（评论数）越高，痛点信号越强
@@ -81,7 +59,8 @@ https://hn.algolia.com/api/v1/search?query={关键词}&tags=story&hitsPerPage=20
 # 加载代理配置
 HTTPS_PROXY=$(grep '^HTTPS_PROXY=' ~/.config/last30days/.env | cut -d= -f2-)
 
-SINCE=$(date -v-6m +%s)
+# 跨平台：用 python3 算半年前的 unix 秒级时间戳（避免 macOS 专属的 date -v）
+SINCE=$(python3 -c 'import datetime; print(int((datetime.datetime.now()-datetime.timedelta(days=180)).timestamp()))')
 curl -s -x "$HTTPS_PROXY" "https://hn.algolia.com/api/v1/search?query=tool+alternative+OR+looking+for&tags=comment&hitsPerPage=20&numericFilters=created_at_i>$SINCE" \
   | python3 -c "
 import sys, json
@@ -109,25 +88,30 @@ for h in data['hits']:
 
 **认证加载：**
 ```bash
-source <(grep -E '^(AUTH_TOKEN|CT0)=' ~/.config/last30days/.env)
+# ⚠️ 不能用 source <(grep ...) —— 管道里的 source 在 subshell 执行，变量不导出
+AUTH_TOKEN=$(grep '^AUTH_TOKEN=' ~/.config/last30days/.env | cut -d= -f2-)
+CT0=$(grep '^CT0=' ~/.config/last30days/.env | cut -d= -f2-)
 ```
 
 **痛点搜索关键词组合：**
 
 | 关键词 | 用途 | 示例查询 |
 |--------|------|---------|
-| `frustrated with` | 直接抱怨 | `frustrated with {领域} since:2026-01-01` |
-| `looking for alternative` | 寻找替代方案 | `looking for alternative {工具名} since:2026-01-01` |
-| `wish there was` | 表达工具缺口 | `wish there was a tool that since:2026-01-01` |
-| `any tool that` | 直接求助 | `any tool that can {功能} since:2026-01-01` |
-| `hate {工具} but` | 对现有方案不满 | `hate github but since:2026-01-01` |
-| `why is there no` | 缺口表达 | `why is there no {功能} since:2026-01-01` |
-| `someone should build` | 创业/项目点子 | `someone should build {领域} since:2026-01-01` |
+| `frustrated with` | 直接抱怨 | `frustrated with {领域} since:$SINCE` |
+| `looking for alternative` | 寻找替代方案 | `looking for alternative {工具名} since:$SINCE` |
+| `wish there was` | 表达工具缺口 | `wish there was a tool that since:$SINCE` |
+| `any tool that` | 直接求助 | `any tool that can {功能} since:$SINCE` |
+| `hate {工具} but` | 对现有方案不满 | `hate github but since:$SINCE` |
+| `why is there no` | 缺口表达 | `why is there no {功能} since:$SINCE` |
+| `someone should build` | 创业/项目点子 | `someone should build {领域} since:$SINCE` |
 
 **调用方式：**
 ```bash
-source <(grep -E '^(AUTH_TOKEN|CT0)=' ~/.config/last30days/.env)
-SINCE=$(date -v-6m +%Y-%m-%d)
+# 认证加载（cut 逐行提取，不用 source <(grep ...)）
+AUTH_TOKEN=$(grep '^AUTH_TOKEN=' ~/.config/last30days/.env | cut -d= -f2-)
+CT0=$(grep '^CT0=' ~/.config/last30days/.env | cut -d= -f2-)
+# 跨平台：用 python3 算半年前日期（避免 macOS 专属的 date -v）
+SINCE=$(python3 -c 'import datetime; print((datetime.date.today()-datetime.timedelta(days=180)).isoformat())')
 BIRD=~/.claude/skills/last30days/scripts/lib/vendor/bird-search/bird-search.mjs
 
 # 直接抱怨 + 找替代方案

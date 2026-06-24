@@ -566,6 +566,8 @@ CLI-only 不是问题，需要配 Docker 不是问题，纯英文不是问题。
 
 ### Vault 合规（交付后必做）
 
+> ℹ️ **以下为作者自用的 vault 集成步骤**（写入 `~/Desktop/耳朵的调研仓库/`）。**外部用户请整段跳过**——你没有这个 vault，这些自检项不适用。若想接入自己的笔记库，可参照此思路改成你自己的路径。
+
 **报告写入 vault 后，必须完成以下三步。缺一不可。**
 
 - [ ] **更新首页**：在 `~/Desktop/耳朵的调研仓库/🏠 首页.md` 的「Gem Hunter — 扫描报告」区域加入新报告链接，更新底部「最后更新」日期
@@ -650,7 +652,8 @@ BOOTSTRAP=~/.claude/skills/last30days/scripts/lib/vendor/bird-search/proxy-boots
 # ============================================
 # 3. 时间范围（默认 6 个月）
 # ============================================
-SINCE=$(date -v-6m +%Y-%m-%d)
+# 跨平台：用 python3 算半年前日期（避免 macOS 专属的 date -v，Linux GNU date 不认）
+SINCE=$(python3 -c 'import datetime; print((datetime.date.today()-datetime.timedelta(days=180)).isoformat())')
 
 # ============================================
 # 4. 痛点搜索 —— 两组并行
@@ -780,7 +783,8 @@ for item in items[:20]:
 # ============================================
 HTTPS_PROXY=$(grep '^HTTPS_PROXY=' ~/.config/last30days/.env | cut -d= -f2-)
 
-SINCE=$(date -v-6m +%s)
+# 跨平台：用 python3 算半年前的 unix 秒级时间戳（避免 macOS 专属的 date -v）
+SINCE=$(python3 -c 'import datetime; print(int((datetime.datetime.now()-datetime.timedelta(days=180)).timestamp()))')
 
 # 搜评论（tags=comment）—— 评论区比帖子本身更有信号
 curl -s -x "$HTTPS_PROXY" "https://hn.algolia.com/api/v1/search?query={关键词}&tags=comment&hitsPerPage=20&numericFilters=created_at_i>$SINCE" \
@@ -828,9 +832,11 @@ if ! curl -sf http://127.0.0.1:18060/health > /dev/null 2>&1; then
   echo "xiaohongshu-mcp 未运行，正在启动..."
   launchctl start xhsmcp 2>/dev/null || {
     # launchd 未加载（首次使用），直接启动二进制
+    # 外部用户：自行安装 xiaohongshu-mcp 到 PATH，或 export XHS_MCP_BIN=/path/to/xiaohongshu-mcp
+    XHS_MCP_BIN="${XHS_MCP_BIN:-xiaohongshu-mcp}"
     XHS_PROXY=$(grep '^HTTPS_PROXY=' ~/.config/last30days/.env | cut -d= -f2-)
     COOKIES_PATH=/tmp/cookies.json \
-      nohup /Users/erduo/.local/bin/xiaohongshu-mcp > /tmp/xhsmcp.log 2>/tmp/xhsmcp.err &
+      nohup "$XHS_MCP_BIN" > /tmp/xhsmcp.log 2>/tmp/xhsmcp.err &
   }
   # 等待服务就绪（最多 10 秒）
   for i in $(seq 1 10); do
@@ -844,6 +850,7 @@ LOGIN_STATUS=$(curl -sf http://127.0.0.1:18060/api/v1/login/status)
 IS_LOGGED_IN=$(echo "$LOGIN_STATUS" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['is_logged_in'])")
 
 if [ "$IS_LOGGED_IN" != "True" ]; then
+  # 注：`xiaohongshu-login` 属于 `xiaohongshu-mcp` 套件的一部分，外部用户需自行安装该套件后才有此命令。
   echo ""
   echo "╔══════════════════════════════════════════════╗"
   echo "║ ⚠️ 小红书未登录                              ║"

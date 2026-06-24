@@ -57,7 +57,7 @@
 4. 搜索结果太多 → 收窄 `stars_max`，或限定具体 topics
 5. 发现候选后 → 逐个用 `get_file` 读 README，用 `list_tags` 看活跃度
 
-### Reddit（JSON API —— 社区验证）
+### Reddit（last30days 引擎 —— 社区验证）
 
 **不搜项目本身，搜"有没有人在讨论这个项目"。** 一个项目即使 Star 少，如果 Reddit 上有人在真诚推荐它（不是作者自荐），就是强验证信号。
 
@@ -70,24 +70,7 @@
 | r/programming | 项目名 | 看有没有讨论 |
 | r/InternetIsBeautiful | 项目名 | 面向普通用户的工具 |
 
-**调用方式：**
-```bash
-# 加载代理配置
-HTTPS_PROXY=$(grep '^HTTPS_PROXY=' ~/.config/last30days/.env | cut -d= -f2-)
-
-curl -s -x "$HTTPS_PROXY" -H "User-Agent: gem-hunter/1.0" \
-  "https://www.reddit.com/search.json?q={项目名}&sort=comments&t=year&limit=10" \
-  | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-for p in data['data']['children']:
-    d = p['data']
-    print(f'{d[\"title\"]} | {d[\"score\"]}pts | {d[\"num_comments\"]}cmt | r/{d[\"subreddit\"]}')
-"
-
-# 如果 curl 返回 HTML（<body class=theme-beta>）而非 JSON → API 被封锁
-# 降级：WebSearch "site:reddit.com {项目名}"，标注"Reddit API 被封锁，搜索引擎中转"
-```
+**调用方式：** 调 last30days 引擎搜项目名（不手动 curl）。完整 bash 命令见 **SKILL.md「数据采集 API 指南」Reddit 章节**（流水线 B 调用——社区验证搜项目名）。引擎不可用时走降级协议，降级为 WebSearch `site:reddit.com {项目名}`。
 
 **信号判断：**
 - 有 2+ 个不同子版块在讨论该项目的 → 社区验证通过
@@ -106,17 +89,23 @@ for p in data['data']['children']:
 
 **认证加载：**
 ```bash
-source <(grep -E '^(AUTH_TOKEN|CT0)=' ~/.config/last30days/.env)
+# ⚠️ 不能用 source <(grep ...) —— 管道里的 source 在 subshell 执行，变量不导出
+AUTH_TOKEN=$(grep '^AUTH_TOKEN=' ~/.config/last30days/.env | cut -d= -f2-)
+CT0=$(grep '^CT0=' ~/.config/last30days/.env | cut -d= -f2-)
 ```
 
 **验证搜索：**
 ```bash
-source <(grep -E '^(AUTH_TOKEN|CT0)=' ~/.config/last30days/.env)
+# 认证加载（cut 逐行提取，不用 source <(grep ...)）
+AUTH_TOKEN=$(grep '^AUTH_TOKEN=' ~/.config/last30days/.env | cut -d= -f2-)
+CT0=$(grep '^CT0=' ~/.config/last30days/.env | cut -d= -f2-)
 BIRD=~/.claude/skills/last30days/scripts/lib/vendor/bird-search/bird-search.mjs
+# 跨平台：用 python3 算半年前日期（避免 macOS 专属的 date -v）
+SINCE=$(python3 -c 'import datetime; print((datetime.date.today()-datetime.timedelta(days=180)).isoformat())')
 
 # 搜项目名 + 推荐/使用信号
 node "$BIRD" \
-  "{项目名} recommend OR love OR using OR switched to since:2026-01-01" \
+  "{项目名} recommend OR love OR using OR switched to since:$SINCE" \
   --count 20 --json > /tmp/x-project.json
 ```
 
